@@ -1,0 +1,201 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CREATOR
+  PLAYER
+}
+
+enum QuizVisibility {
+  PUBLIC
+  PRIVATE
+  DRAFT
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          Role      @default(PLAYER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  quizzes       Quiz[]
+  attempts      Attempt[]
+  leaderboard   LeaderboardEntry[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Quiz {
+  id           String         @id @default(cuid())
+  title        String
+  description  String?
+  coverImage   String?
+  category     String         @default("General")
+  visibility   QuizVisibility @default(DRAFT)
+  timePerQ     Int            @default(20)
+  totalPoints  Int            @default(0)
+  playCount    Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  creatorId    String
+  creator      User           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  questions    Question[]
+  attempts     Attempt[]
+  leaderboard  LeaderboardEntry[]
+
+  @@map("quizzes")
+}
+
+model Question {
+  id          String       @id @default(cuid())
+  text        String
+  image       String?
+  type        QuestionType @default(MULTIPLE_CHOICE)
+  points      Int          @default(100)
+  timeLimit   Int          @default(20)
+  order       Int          @default(0)
+  explanation String?
+  createdAt   DateTime     @default(now())
+
+  quizId      String
+  quiz        Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options     Option[]
+  answers     Answer[]
+
+  @@map("questions")
+}
+
+model Option {
+  id         String   @id @default(cuid())
+  text       String
+  isCorrect  Boolean  @default(false)
+  order      Int      @default(0)
+
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers    Answer[]
+
+  @@map("options")
+}
+
+model Attempt {
+  id           String        @id @default(cuid())
+  status       AttemptStatus @default(IN_PROGRESS)
+  score        Int           @default(0)
+  accuracy     Float         @default(0)
+  timeTaken    Int           @default(0)
+  tabSwitches  Int           @default(0)
+  startedAt    DateTime      @default(now())
+  completedAt  DateTime?
+
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizId       String
+  quiz         Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  answers      Answer[]
+
+  @@map("attempts")
+}
+
+model Answer {
+  id           String   @id @default(cuid())
+  isCorrect    Boolean
+  pointsEarned Int      @default(0)
+  timeSpent    Int      @default(0)
+  answeredAt   DateTime @default(now())
+
+  attemptId    String
+  attempt      Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId   String
+  question     Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  optionId     String?
+  option       Option?  @relation(fields: [optionId], references: [id])
+
+  @@unique([attemptId, questionId])
+  @@map("answers")
+}
+
+model LeaderboardEntry {
+  id        String   @id @default(cuid())
+  rank      Int      @default(0)
+  score     Int
+  accuracy  Float
+  timeTaken Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, quizId])
+  @@map("leaderboard_entries")
+}
